@@ -13,6 +13,7 @@
         android:text="Your Selected Image is Modified"
         android:textColor="@color/black"
         android:textSize="24sp"
+        android:gravity="center"
         app:layout_constraintBottom_toTopOf="@+id/btn_check_image"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
         }
 
     val permissiongStorage: Int = 99
+    var currentHex = ""
 
     private lateinit var binding: ActivityMainBinding
 
@@ -86,7 +87,8 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
 
     private fun checkHex(imageUri: Uri) = CoroutineScope(Dispatchers.IO).launch {
         val file = FileManager.getPath(this@MainActivity, imageUri)
-        val hexList = database.userDao().getAllHex().map { it.hexaDecimal }
+        val hexDao = database.userDao().getAllHex()
+        val hexList = database.userDao().getAllHex().map { it.hexaDecimal }.sortedByDescending { it.length }
         if (File(file.orEmpty()).isFile) {
             val bytes = File(file!!).readBytes()
             runOnUiThread {
@@ -98,13 +100,15 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
                 binding.progressBar.max = bytes.count()
             }
 
-            bytes.forEachIndexed { index, byte ->
-                val stringHex = String.format("%02X", byte)
-                val isIndicateContains = hexList.count { it.substring(0, 2) == stringHex } > 0
+            var x = 0
 
-                if (isIndicateContains && isModified(bytes, index, hexList)) {
+            while (x < bytes.count()){
+                val stringHex = String.format("%02X", bytes[x])
+                val isIndicateContains = hexList.count { it.substring(0, 2) == stringHex } > 0
+                if (isIndicateContains && isModified(bytes, x, hexList)) {
                     runOnUiThread {
-                        binding.tvResult.text = "YOUR IMAGE IS MODIFIED"
+                        binding.tvResult.text = "YOUR IMAGE IS MODIFIED\nby\n${
+                           hexDao.firstOrNull { it.hexaDecimal == currentHex }?.programName}"
                         binding.progressBar.progress = 0
                         binding.progressBar.isGone = true
 
@@ -113,12 +117,18 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
                     }
 
                     return@launch
+                } else {
+                    x += if (isIndicateContains){
+                        hexList.last().count() - 1
+                    } else {
+                        hexList.first().count() - 1
+                    }
                 }
                 runOnUiThread {
-                   binding.progressBar.progress = index
+                    binding.progressBar.progress = x
                 }
-
             }
+
             runOnUiThread {
                 binding.progressBar.progress = 0
                 binding.progressBar.isGone = true
@@ -136,10 +146,8 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
 
     private fun isModified(bytes: ByteArray, index: Int, hexList: List<String>): Boolean {
 
-        val isModified = false
-
         if (index > bytes.count()) {
-            return isModified
+            return false
         }
         hexList.forEachIndexed { _, s ->
 
@@ -148,11 +156,12 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
                 bytes.copyOfRange(index, index + indexHex).map { String.format("%02X", it) }
                     .joinToString(" ")
             if (s == currentByte) {
+                currentHex = s
                 return true
             }
         }
 
-        return isModified
+        return false
 
     }
 
