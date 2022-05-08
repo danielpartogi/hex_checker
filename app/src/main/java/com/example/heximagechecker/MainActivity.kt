@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
         }
 
     val permissiongStorage: Int = 99
-    var currentHex = ""
+    var currentHex: MutableList<String> = mutableListOf()
 
     private lateinit var binding: ActivityMainBinding
 
@@ -87,12 +87,14 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
 
     private fun checkHex(imageUri: Uri) = CoroutineScope(Dispatchers.IO).launch {
         val file = FileManager.getPath(this@MainActivity, imageUri)
+        currentHex = mutableListOf()
         val hexDao = database.userDao().getAllHex()
-        val hexList = database.userDao().getAllHex().map { it.hexaDecimal }.sortedByDescending { it.length }
+        val hexList =
+            database.userDao().getAllHex().map { it.hexaDecimal }.sortedByDescending { it.length }
         if (File(file.orEmpty()).isFile) {
             val bytes = File(file!!).readBytes()
             runOnUiThread {
-                binding.progressBar.isGone= false
+                binding.progressBar.isGone = false
                 binding.btnCheckImage.isEnabled = false
                 binding.btnCheckImage.isFocusable = false
                 binding.tvResult.text = "Checking..."
@@ -100,69 +102,43 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
                 binding.progressBar.max = bytes.count()
             }
 
-            var x = 0
-
-            while (x < bytes.count()){
-                val stringHex = String.format("%02X", bytes[x])
-                val isIndicateContains = hexList.count { it.substring(0, 2) == stringHex } > 0
-                if (isIndicateContains && isModified(bytes, x, hexList)) {
-                    runOnUiThread {
-                        binding.tvResult.text = "YOUR IMAGE IS MODIFIED\nby\n${
-                           hexDao.firstOrNull { it.hexaDecimal == currentHex }?.programName}"
-                        binding.progressBar.progress = 0
-                        binding.progressBar.isGone = true
-
-                        binding.btnCheckImage.isEnabled = true
-                        binding.btnCheckImage.isFocusable = true
-                    }
-
-                    return@launch
-                } else {
-                    x += if (isIndicateContains){
-                        hexList.last().count() - 1
-                    } else {
-                        hexList.first().count() - 1
-                    }
+            val hex = bytes.toHexString()
+            hexList.forEachIndexed { index, it ->
+                if (hex.contains(it.split(" ").joinToString("").lowercase())) {
+                    currentHex.add(it)
                 }
                 runOnUiThread {
-                    binding.progressBar.progress = x
+                   if (index < (hexList.count() -1)){
+                       binding.progressBar.progress =
+                           binding.progressBar.max - if (index == 0) binding.progressBar.max else binding.progressBar.max / index
+                   } else {
+                       binding.progressBar.progress = binding.progressBar.max
+                   }
                 }
             }
 
             runOnUiThread {
-                binding.progressBar.progress = 0
-                binding.progressBar.isGone = true
+                if (currentHex.count() > 0) {
+                    binding.tvResult.text = "YOUR IMAGE IS MODIFIED\nby\n${
+                        hexDao.firstOrNull {
+                            it.hexaDecimal == currentHex.apply { sortBy { a -> a.count() } }
+                                .last()
+                        }?.programName
+                    }"
+                } else {
+                    binding.tvResult.text = "YOUR IMAGE IS ORIGINAL"
+                }
+
                 binding.btnCheckImage.isEnabled = true
                 binding.btnCheckImage.isFocusable = true
-                binding.tvResult.text = "YOUR IMAGE IS ORIGINAL"
             }
+
 
         } else {
             runOnUiThread {
                 Toast.makeText(this@MainActivity, "Something went wrong", Toast.LENGTH_LONG).show()
             }
         }
-    }
-
-    private fun isModified(bytes: ByteArray, index: Int, hexList: List<String>): Boolean {
-
-        if (index > bytes.count()) {
-            return false
-        }
-        hexList.forEachIndexed { _, s ->
-
-            val indexHex = s.split(" ").count()
-            val currentByte =
-                bytes.copyOfRange(index, index + indexHex).map { String.format("%02X", it) }
-                    .joinToString(" ")
-            if (s == currentByte) {
-                currentHex = s
-                return true
-            }
-        }
-
-        return false
-
     }
 
     private fun readTheFiles() {
@@ -183,7 +159,8 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
 
     override fun onPermissionsDenied(requestCode: Int, perms: MutableList<String>) {
 
-        val permissionStorage = ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+        val permissionStorage =
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
         if (permissionStorage != PackageManager.PERMISSION_GRANTED) {
             val builder = AppSettingsDialog.Builder(this)
             builder.build().show()
@@ -197,3 +174,5 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
     }
 
 }
+
+fun ByteArray.toHexString() = asUByteArray().joinToString("") { it.toString(16).padStart(2, '0') }
