@@ -121,9 +121,8 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
                 if (currentHex.count() > 0) {
                     binding.tvResult.text = "YOUR IMAGE IS MODIFIED\nby\n${
                         hexDao.firstOrNull {
-                            it.hexaDecimal == currentHex.apply { sortBy { a -> a.count() } }
-                                .last()
-                        }?.programName
+                            it.hexaDecimal == currentHex.maxByOrNull { a -> a.count() }
+                        }?.programName.orEmpty()
                     }"
                 } else {
                     binding.tvResult.text = "YOUR IMAGE IS ORIGINAL"
