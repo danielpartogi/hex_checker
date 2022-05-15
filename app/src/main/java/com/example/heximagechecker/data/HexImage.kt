@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 data class HexImage(
     @PrimaryKey
     val programName: String,
-    val hexaDecimal: String,
+    val primaryHex: String,
+    val secondaryHex: String,
 )

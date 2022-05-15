@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -41,7 +42,8 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
         }
 
     val permissiongStorage: Int = 99
-    var currentHex: MutableList<String> = mutableListOf()
+    var currentHexPrimary: MutableList<String> = mutableListOf()
+    var currentHexSecondary: MutableList<String> = mutableListOf()
 
     private lateinit var binding: ActivityMainBinding
 
@@ -87,10 +89,10 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
 
     private fun checkHex(imageUri: Uri) = CoroutineScope(Dispatchers.IO).launch {
         val file = FileManager.getPath(this@MainActivity, imageUri)
-        currentHex = mutableListOf()
-        val hexDao = database.userDao().getAllHex()
+        currentHexPrimary = mutableListOf()
+        currentHexSecondary = mutableListOf()
         val hexList =
-            database.userDao().getAllHex().map { it.hexaDecimal }.sortedByDescending { it.length }
+            database.userDao().getAllHex()
         if (File(file.orEmpty()).isFile) {
             val bytes = File(file!!).readBytes()
             runOnUiThread {
@@ -104,25 +106,35 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
 
             val hex = bytes.toHexString()
             hexList.forEachIndexed { index, it ->
-                if (hex.contains(it.split(" ").joinToString("").lowercase())) {
-                    currentHex.add(it)
+                val isPrimaryHexPresent =
+                    hex.contains(it.primaryHex.split(" ").joinToString("").lowercase())
+                val isSecondaryHexPresent =
+                    hex.contains(it.secondaryHex.split(" ").joinToString("").lowercase())
+                if (isPrimaryHexPresent && isSecondaryHexPresent && it.primaryHex.isNotEmpty()) {
+                    currentHexSecondary.add(it.programName)
+                }
+                if (isPrimaryHexPresent && it.primaryHex.isNotEmpty()) {
+                    currentHexPrimary.add(it.programName)
                 }
                 runOnUiThread {
-                   if (index < (hexList.count() -1)){
-                       binding.progressBar.progress =
-                           binding.progressBar.max - if (index == 0) binding.progressBar.max else binding.progressBar.max / index
-                   } else {
-                       binding.progressBar.progress = binding.progressBar.max
-                   }
+                    if (index < (hexList.count() - 1)) {
+                        binding.progressBar.progress =
+                            binding.progressBar.max - if (index == 0) binding.progressBar.max else binding.progressBar.max / index
+                    } else {
+                        binding.progressBar.progress = binding.progressBar.max
+                    }
                 }
             }
 
             runOnUiThread {
-                if (currentHex.count() > 0) {
+                if (currentHexSecondary.isNotEmpty()) {
+                    Log.d("current_hex", currentHexSecondary.toString())
                     binding.tvResult.text = "YOUR IMAGE IS MODIFIED\nby\n${
-                        hexDao.firstOrNull {
-                            it.hexaDecimal == currentHex.maxByOrNull { a -> a.count() }
-                        }?.programName.orEmpty()
+                        currentHexSecondary.last()
+                    }"
+                } else if (currentHexPrimary.isNotEmpty()) {
+                    binding.tvResult.text = "YOUR IMAGE IS MODIFIED\nby\n${
+                        currentHexPrimary.first()
                     }"
                 } else {
                     binding.tvResult.text = "YOUR IMAGE IS ORIGINAL"
